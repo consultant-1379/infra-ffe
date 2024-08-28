@@ -1,0 +1,16 @@
+[ req ]
+default_bits = 2048
+distinguished_name = dn
+req_extensions = req_ext
+prompt = no
+days = 365
+[ dn ]
+CN = ${deployment_id}.athtem.eei.ericsson.se
+O = LM Ericsson Ltd.
+OU = EE
+L = Athlone
+ST = WH
+C = IE
+
+[ req_ext ]
+subjectAltName = DNS: ${deployment_id}.athtem.eei.ericsson.se

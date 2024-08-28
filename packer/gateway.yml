@@ -1,0 +1,296 @@
+- name: Configure Gateway VM
+  hosts: default
+  gather_facts: true
+  gather_subset: min
+  become: yes
+  tasks:
+    - name: Create apt keyring directory
+      file:
+        path: /etc/apt/keyrings/
+        state: directory
+    - name: Copy Docker GPG into keyring
+      copy:
+        src: docker.gpg
+        dest: /etc/apt/keyrings/docker.gpg
+        mode: 0644
+    - name: Add docker repo
+      copy:
+        content: |
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        dest: /etc/apt/sources.list.d/docker.list
+        mode: 0644
+        owner: root
+        group: root
+
+    - name: Update list of available packages and their versions
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin 
+          - docker-compose-plugin
+          - docker-compose
+          - python3-dockerpycreds
+          - python3-cinderclient
+          - python3-glanceclient
+          - python3-heatclient
+          - python3-keystoneclient
+          - python3-neutronclient
+          - python3-novaclient
+          - python3-openstackclient
+          - python3-swiftclient
+          - nginx
+          - libz-dev 
+          - libssl-dev 
+          - libcurl4-gnutls-dev
+          - libexpat1-dev 
+          - gettext 
+          - cmake
+          - gcc
+          - iptables-persistent
+          - bind9
+          - dnsutils
+          - net-tools
+          - rpcbind
+          - java-common
+          - default-jre
+          - default-jdk
+          - rpm2cpio
+          - chrony
+
+    - name: Copy Git tar file
+      copy:
+        src: git-2.28.0.tar.gz
+        dest: /tmp
+    - name: Extract git tar file
+      ansible.builtin.unarchive:
+        src: /tmp/git-2.28.0.tar.gz
+        remote_src: true
+        dest: /tmp
+    - name: Build Git
+      shell: 'make prefix=/usr/local all;make prefix=/usr/local install;git --version'
+      args:
+        chdir: /tmp/git-2.28.0
+
+    - name: Copy bind configuration files to /etc/bind/
+      copy:
+        src: '{{ bind_conf }}'
+        dest: /etc/bind
+        backup: yes
+      loop:
+        - db.172.16.30
+        - db.192.168.0
+        - db.vts.com
+        - named.conf.local
+        - named.conf.options
+      loop_control:
+        loop_var: bind_conf
+        label: "{{ bind_conf }}"
+
+    - name: Copy chrony.conf
+      copy:
+        src: chrony.conf
+        dest: /etc/chrony/chrony.conf
+    
+    - name: Enable nginx & chronyd to start on boot
+      ansible.builtin.systemd:
+        name: "{{ services }}"
+        enabled: true
+      loop:
+        - nginx # Creates symlink /etc/systemd/system/multi-user.target.wants/nginx.service → /lib/systemd/system/nginx.service
+        - chronyd # Creates symlink /etc/systemd/system/multi-user.target.wants/chrony.service → /lib/systemd/system/chrony.service
+      loop_control:
+        loop_var: services
+        label: "{{ services }}"
+
+    - name: Copy nginx-create-cert.sh script
+      copy:
+        src: nginx-create-cert.sh
+        dest: /usr/local/bin/nginx-create-cert.sh
+        mode: 0755
+        owner: root
+        group: root
+
+    - name: Update nginx systemd file to check the SSL cert before starting
+      lineinfile:
+        path: /lib/systemd/system/nginx.service
+        insertbefore: '^ExecStartPre'
+        line: 'ExecStartPre=/bin/bash /usr/local/bin/nginx-create-cert.sh'
+        state: present
+
+    - name: Update nginx systemd file to start service when network is online
+      ini_file:
+        dest: /lib/systemd/system/nginx.service
+        section: Unit
+        option: After
+        value: "network-online.target nss-lookup.target"
+
+    - name: Enable PasswordAuthentication for SSH
+      replace:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication.*'
+        replace: 'PasswordAuthentication yes'
+
+    - name: Enable IP forwarding
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+      loop:
+        - net.ipv4.ip_forward
+        - net.ipv6.conf.all.forwarding
+
+    - name: Set the policy for the FORWARD, INPUT and OUTPUT chain to ACCEPT
+      ansible.builtin.iptables:
+        chain: '{{ chain }}'
+        policy: ACCEPT
+      loop:
+        - FORWARD
+        - INPUT
+        - OUTPUT
+      loop_control:
+        loop_var: chain
+        label: '{{ chain }}'
+    - name: Enable masquerade
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: ens3
+        jump: MASQUERADE
+    # could loop over a list of rules here
+    - name: Enable DNAT rules
+      ansible.builtin.iptables:
+        table: nat
+        chain: PREROUTING
+        in_interface : ens3
+        protocol: tcp
+        source: '{{ item.source |default("0.0.0.0/0") }}'
+        jump: DNAT
+        comment: '{{ item.comment }}'
+        to_destination: '{{ item.destination }}'
+        destination_port : '{{ item.dport }}'
+      loop:
+        - destination: 192.168.0.2:22
+          comment: "Netsim SSH Traffic"
+          dport: 2202
+        - destination: 192.168.0.2:23
+          comment: "Netsim Telnet Traffic"
+          dport: 2302
+        - destination: 192.168.0.2:514
+          comment: "Netsim Syslog Traffic"
+          dport: 514
+        - destination: 192.168.0.8:22
+          comment: "EMP SSH Traffic"
+          dport: 2203
+        - destination: 192.168.0.197:8080
+          comment: "Rule for tafexem1 Jenkins"
+          dport: 8080
+          source: "! 192.168.0.0/24"
+        - destination: 192.168.0.231:5901
+          comment: "Seleniumhub: selnode-firefox1 VNC Traffic"
+          dport: 5901
+        - destination: 192.168.0.231:5903
+          comment: "Seleniumhub: siknode-firefox VNC Traffic"
+          dport: 5903
+        - destination: 192.168.0.231:5904
+          comment: "Seleniumhub: selnode-chrome1 VNC Traffic"
+          dport: 5904
+    - name: Save iptables rules
+      shell: iptables-save > /etc/iptables/rules.v4
+
+    - name: Set the policy for the FORWARD, INPUT and OUTPUT chain to ACCEPT for ipv6
+      ansible.builtin.iptables:
+        chain: '{{ chain }}'
+        policy: ACCEPT
+        ip_version: ipv6
+      loop:
+        - FORWARD
+        - INPUT
+        - OUTPUT
+      loop_control:
+        loop_var: chain
+        label: '{{ chain }}'
+    - name: Enable masquerade for ipv6
+      ansible.builtin.iptables:
+        table: nat
+        ip_version: ipv6
+        chain: POSTROUTING
+        out_interface: ens3
+        jump: MASQUERADE
+    # could loop over a list of rules here
+    - name: Enable DNAT rules for ipv6
+      ansible.builtin.iptables:
+        table: nat
+        ip_version: ipv6
+        chain: PREROUTING
+        in_interface : ens3
+        protocol: tcp
+        source: '{{ item.source |default("::/0") }}'
+        jump: DNAT
+        comment: '{{ item.comment }}'
+        to_destination: '{{ item.destination }}'
+        destination_port : '{{ item.dport }}'
+      loop:
+        - destination: "2001:1b70:82a1:103::2:22"
+          comment: "Netsim SSH Traffic"
+          dport: 2202
+        - destination: "2001:1b70:82a1:103::2:23"
+          comment: "Netsim Telnet Traffic"
+          dport: 2302
+        - destination: "2001:1b70:82a1:103::2:514"
+          comment: "Netsim Syslog Traffic"
+          dport: 514
+        - destination: "2001:1b70:82a1:0103::7:22"
+          comment: "EMP SSH Traffic"
+          dport: 2203
+        - destination: "2001:1b70:82a1:103::c5:8080"
+          comment: "Rule for tafexem1 Jenkins"
+          dport: 8080
+          source: "! 2001:1b70:82a1:103::/64"
+        - destination:  "2001:1b70:82a1:103::e7:5901"
+          comment: "Seleniumhub: selnode-firefox1 VNC Traffic"
+          dport: 5901
+        - destination:  "2001:1b70:82a1:103::e7:5903"
+          comment: "Seleniumhub: siknode-firefox VNC Traffic"
+          dport: 5903
+        - destination:  "2001:1b70:82a1:103::e7:5904"
+          comment: "Seleniumhub: selnode-chrome1 VNC Traffic"
+          dport: 5904
+    - name: Save iptables rules
+      shell: ip6tables-save > /etc/iptables/rules.v6
+
+    - name: Create lciadm100 user
+      ansible.builtin.user:
+        name: lciadm100
+        shell: /bin/bash
+        expires: -1
+        password: "$6$rounds=250000$AHXpJsOsdeMwnFtV$6usIVML/FlSv/0QiJ1ZZAdQvoSj.v0WhSgJmiHB1l8tff9E5pY.YHR6.9Q8haeHQ8TXw/cureSIMOlaL95ncR/"
+        groups: docker
+
+    - name: Create /home/lciadm100/.ssh directory
+      file:
+        state: directory
+        path: /home/lciadm100/.ssh
+        mode: 0700
+        owner: lciadm100
+        group: lciadm100
+
+    - name: Add lciadm100 user to sudoers config    
+      copy:
+        content: "lciadm100 ALL=(ALL) NOPASSWD: ALL"
+        dest: /etc/sudoers.d/lciadm100
+
+    - name: Delete sshd cloud-init configuration file
+      file:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        state: absent
+    - name: Run cloud-init clean
+      command:
+        cmd: cloud-init clean --logs --machine-id --seed

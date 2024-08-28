@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ "${IFACE}" == "ens4" ]; then
+    echo "$(basename $0): route docker traffic to mgmt routing table"
+    ip route add 172.17.0.2/32 dev docker0 table mgmt
+    echo "$(basename $0): route all traffic towards ens4 to mgmt routing table"
+    ip rule add from all iif ens4 lookup mgmt
+fi

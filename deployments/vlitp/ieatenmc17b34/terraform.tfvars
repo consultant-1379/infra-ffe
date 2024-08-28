@@ -1,0 +1,10 @@
+deployment_id           = "ieatenmc17b34"
+ssh_public_key          = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICw52PCZaoiLAzdkMD5ytK+/13En1NiYheHXQvGlVN2m"
+external_network        = "p122-opstk-17b-public-tenant2"
+public_ip               = "10.150.226.227"
+svc_node_count          = 12
+project                 = "EE_VLITP_C17B34"
+base_project            = "FFE_infra_admin"
+netsim_base_volume      = "netsim_base_root_volume"
+seleniumhub_base_volume = "seleniumhub_base_root_volume"
+tafex_base_volume       = "tafex_base_root_volume"

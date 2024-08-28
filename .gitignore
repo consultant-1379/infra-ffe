@@ -1,0 +1,4 @@
+# prevent commit of terraform providers or state files
+**/.terraform/**
+**/*.tfstate
+.vscode/**

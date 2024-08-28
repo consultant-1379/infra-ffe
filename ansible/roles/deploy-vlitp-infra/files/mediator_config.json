@@ -1,0 +1,9 @@
+{
+    "flavors": {
+        "lms": "vlitp_lms_node_flavor",
+        "db": "vlitp_db_node_flavor",
+        "svc": "vlitp_svc_node_flavor",
+        "evt": "vlitp_evt_node_flavor",
+        "default": "vlitp_svc_node_flavor"
+    }
+}

@@ -1,0 +1,39 @@
+network:
+  version: 2
+  ethernets:
+    ens3:
+      addresses:
+        - ${external_ipv4_address}
+      routes:
+        - to: default
+          via: ${external_ipv4_gateway}
+    ens4:
+        dhcp4: false
+        dhcp6: false
+        addresses:
+          - 172.16.20.1/22
+        routes:
+          - to: 172.16.20.0/22
+            table: 1
+          - to: default
+            via: 172.16.23.254
+            table: 1
+        routing-policy:
+          - from: 172.16.20.0/22
+            table: 1
+    ens5:
+        dhcp4: false
+        dhcp6: false
+        addresses:
+          - 192.168.0.1/16
+    ens6:
+        dhcp4: false
+        dhcp6: false
+        addresses:
+          - 172.16.16.1/22
+          - 172.16.16.6/22
+    ens7:
+        dhcp4: false
+        dhcp6: false
+        addresses:
+          - 172.16.0.1/24

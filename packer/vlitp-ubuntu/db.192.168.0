@@ -1,0 +1,16 @@
+$ORIGIN 0.168.192.in-addr.arpa.
+$TTL 1D
+@     IN SOA  gateway.vlitp.athtem.eei.ericsson.se. root.vlitp.athtem.eei.ericsson.se. (
+              200405190  ; serial
+              28800      ; refresh (8 hours)
+              14400      ; retry (4 hours)
+              2419200    ; expire (4 weeks)
+              86400      ; minimum (1 day)
+              )
+              NS      gateway.vlitp.athtem.eei.ericsson.se.
+1             PTR     gateway.vlitp.athtem.eei.ericsson.se.
+2             PTR     netsim.vlitp.athtem.eei.ericsson.se.
+3             PTR     lms.vlitp.athtem.eei.ericsson.se
+197     PTR     tafexem1.vlitp.athtem.eei.ericsson.se.
+231     PTR     selenium-hub.vlitp.athtem.eei.ericsson.se.
+

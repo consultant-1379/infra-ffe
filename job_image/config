@@ -1,0 +1,44 @@
+Host *
+        GSSAPIAuthentication no
+Host ci
+  Hostname cifwk-oss.lmera.ericsson.se
+  Port 29418
+  User lciadm100
+Host gc
+  Hostname gerrit.ericsson.se
+  Port 29418
+  User lciadm100
+Host gcm
+  Hostname gerritmirror.lmera.ericsson.se
+  Port 29418
+  User lciadm100
+Host gf
+  Hostname gerritforge.lmera.ericsson.se
+  Port 29418
+  User lciadm100
+Host gerrit.ericsson.se
+  Hostname gerrit.ericsson.se
+  User lciadm100
+  StrictHostKeyChecking no
+Host gerrit-gamma.gic.ericsson.se
+  Hostname gerrit-gamma.gic.ericsson.se
+  Port 29418
+  User lciadm100
+Host gerrit-gamma-read.sero.gic.ericsson.se
+  Hostname gerrit-gamma-read.sero.gic.ericsson.se
+  User lciadm100
+  Port 29418
+  StrictHostKeyChecking no
+Host gerrit-gamma-read.seli.gic.ericsson.se
+  Hostname gerrit-gamma-read.seli.gic.ericsson.se
+  User lciadm100
+  Port 29418
+  StrictHostKeyChecking no
+Host gerritmirror.lmera.ericsson.se
+  Hostname gerritmirror.lmera.ericsson.se
+  User lciadm100
+  StrictHostKeyChecking no
+Host gerritmirror.seli.gic.ericsson.se
+  Hostname gerritmirror.seli.gic.ericsson.se
+  User lciadm100
+  StrictHostKeyChecking no

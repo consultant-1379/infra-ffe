@@ -1,0 +1,41 @@
+server {
+    listen ${deployment_id}:443 ssl http2;
+    access_log /var/log/nginx/enm.access.log;
+    error_log /var/log/nginx/enm.error.log debug;
+    server_name ${deployment_id} ${deployment_id}.athtem.eei.ericsson.se;
+    ssl_certificate /etc/nginx/proxycer.pem;
+    ssl_certificate_key /etc/nginx/proxykey.pem;
+    # Allow files up to 5GB in size to be uploaded
+    client_max_body_size 5120M;
+    location / {
+        if ( $args ~ goto=https://${deployment_id}.athtem.eei.ericsson.se:443/ ) {
+            set $args goto=https://enmapache.athtem.eei.ericsson.se;
+        }
+        proxy_pass https://192.168.0.102:443/;
+        proxy_ssl_verify off;
+        proxy_redirect https://enmapache.athtem.eei.ericsson.se:443/login/?goto=https%3A%2F%2Fenmapache.athtem.eei.ericsson.se%3A443%2F  https://${deployment_id}.athtem.eei.ericsson.se:443/login/?goto=https://${deployment_id}.athtem.eei.ericsson.se:443/;
+        proxy_redirect https://enmapache.athtem.eei.ericsson.se:443/login/?goto=https://enmapache.athtem.eei.ericsson.se  https://${deployment_id}.athtem.eei.ericsson.se:443/login/?goto=https://${deployment_id}.athtem.eei.ericsson.se:443/;
+        proxy_redirect https://enmapache.athtem.eei.ericsson.se:443/logout?goto=https://enmapache.athtem.eei.ericsson.se  https://${deployment_id}.athtem.eei.ericsson.se:443/logout?goto=https://${deployment_id}.athtem.eei.ericsson.se:443/;
+
+        proxy_redirect https://enmapache.athtem.eei.ericsson.se:443/  https://${deployment_id}.athtem.eei.ericsson.se:443/;
+        proxy_redirect https://enmapache.athtem.eei.ericsson.se/  https://${deployment_id}.athtem.eei.ericsson.se:443/;
+    }
+    # Websocket application configuration
+    location ~* ^/((terminal-websocket|nodecli-websocket|websocket|scripting-terminal-ws).*)$ {
+        proxy_pass https://192.168.0.102:443/$1$is_args$args;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+        proxy_read_timeout 4200;
+        proxy_send_timeout 4200;
+    }
+    # configuration for webpush notifications
+    location /web-push {
+        proxy_pass https://192.168.0.102:443/web-push;
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+
+    }
+}

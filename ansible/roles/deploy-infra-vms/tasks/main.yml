@@ -1,0 +1,158 @@
+---
+- name: Set gateway IP, project directory and project name variables
+  set_fact:
+    gateway_ip: '{{ lookup("dig", deployment_id, "@" + dns_servers| join(",")) }}'
+    gateway_ipv6: '{{ lookup("dig", deployment_id, "@" + dns_servers| join(","),qtype="AAAA") }}'
+    project_dir: '{{ playbook_dir | replace("/ansible","")}}/deployments/{{ deployment_id }}/'
+
+- name: Print project directory
+  debug:
+    var: "{{ item }}"
+  loop:
+    - gateway_ip
+    - project_dir
+    - project
+
+- name: Set SSH key path
+  set_fact:
+    ssh_key_path: "{{ project_dir  + deployment_id }}_ssh_key"
+
+- name: Check if project directory exists
+  stat:
+    path: "{{ project_dir }}"
+  register: stat_project_dir
+
+- name: Is new project
+  set_fact:
+    is_new_project: "{{ not stat_project_dir.stat.exists }}"
+
+- name: Create project directory
+  file:
+    path: "{{ project_dir }}"
+    state: directory
+  when: is_new_project
+
+- name: Check if SSH key exists
+  stat:
+    path: "{{ ssh_key_path }}"
+  register: stat_ssh_key
+
+- name: Generate SSH Keypair
+  block:
+    - name: Generate SSH Key
+      community.crypto.openssh_keypair:
+        path: /tmp/id_ed25519
+        type: ed25519
+        mode: 0600
+      register: ssh_key
+
+    - name: "Encrypt SSH private key and store in {{ project_dir }}"
+      copy:
+        content: |
+          {{ lookup("file",ssh_key.filename,rstrip=false) | vault(lookup("file",vaultfile)) }}
+        dest: "{{ ssh_key_path }}"
+        mode: 0600
+        decrypt: false
+      vars:
+        vaultfile: "{{ lookup('env','ANSIBLE_VAULT_PASSWORD_FILE') }}"
+
+    - name: "Copy SSH public key to {{ project_dir }}"
+      copy:
+        src: "{{ ssh_key.filename }}.pub"
+        dest: "{{ ssh_key_path }}.pub"
+        mode: 0644
+  when: not stat_ssh_key.stat.exists
+
+- include_tasks: base_volumes.yml
+
+- name: Create terraform configuration
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ project_dir + item }}"
+  loop:
+    - backend.tf
+    - main.tf
+
+- name: Format Terraform files
+  command: terraform fmt
+  args:
+    chdir: "{{ project_dir }}"
+
+- name: "Add the {{ base_project_user }} user to the project as an admin"
+  openstack.cloud.role_assignment:
+    user: "{{ base_project_user }}"
+    role: admin
+    project: "{{ project }}"
+
+- name: Apply Terraform configuration
+  community.general.terraform:
+    project_path: "{{ project_dir }}"
+    state: present
+    force_init: true
+    provider_upgrade: true
+  register: terraform_apply
+  no_log: false
+  environment:
+    PGPASSWORD: "{{ terraform_postgres_password }}"
+
+- name: Output from applying Terraform configuration
+  debug:
+    msg: "{{ terraform_apply.stdout_lines  }}"
+
+# This is needed as ansible_ssh_private_key_file: '{{ ssh_key_path }}' does not
+# work in the add_host task
+- name: Create temporary copy of SSH key
+  copy:
+    src: "{{ ssh_key_path }}"
+    dest: "/tmp/{{ deployment_id }}_temp_ssh"
+    mode: 0600
+  register: copy_ssh_key
+
+- name: Add gateway to inventory
+  ansible.builtin.add_host:
+    name: "{{ deployment_id }}"
+    ansible_user: lciadm100
+    ansible_ssh_private_key_file: "{{ copy_ssh_key.dest }}"
+    ansible_ssh_common_args: "-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null"
+
+- name: "Wait for {{ deployment_id }}_gateway VM to be accessible over SSH"
+  ansible.builtin.wait_for_connection:
+    delay: 20
+    sleep: 5
+  delegate_to: "{{ deployment_id }}"
+
+- name: Copy SSH key to the gateway
+  copy:
+    src: "{{ item }}"
+    dest: /home/lciadm100/.ssh/
+    mode: '{{ "0644" if "pub" in item else "0600" }}'
+  delegate_to: "{{ deployment_id }}"
+  loop:
+    - "{{ ssh_key_path }}"
+    - "{{ ssh_key_path }}.pub"
+
+- name: Commit changes to git
+  block:
+    - name: Add project directory if newly created
+      shell: "git add {{ project_dir }}"
+      when: is_new_project
+
+    # git diff returns 1 if there are changes, 0 if there are none.
+    - name: Run git diff to check for changes
+      shell: git diff --quiet HEAD
+      args:
+        chdir: "{{ project_dir }}"
+      register: git_diff
+      ignore_errors: true
+
+    - name: Print git diff
+      debug:
+        msg: "{{ git_diff.stdout_lines }}"
+    - name: Commit changes to Git repo
+      shell: "git add .; git commit -m 'deployed {{ deployment_id }}'"
+      args:
+        chdir: "{{ project_dir }}"
+      register: git_commit
+      when: git_diff.rc|int == 1
+  tags:
+    - git

@@ -1,0 +1,43 @@
+$ORIGIN 30.16.172.in-addr.arpa.
+$TTL 1D
+@     IN SOA  gatewaysvip.vts.com. rootsvip.vts.com. (
+              200405191  ; serial
+              28800      ; refresh (8 hours)
+              14400      ; retry (4 hours)
+              2419200    ; expire (4 weeks)
+              86400      ; minimum (1 day)
+              )
+              NS      gatewaysvip.vts.com.
+1             PTR     gatewaysvip.vts.com.
+4             PTR     ossmastersvip.vts.com.
+5             PTR     uas1svip.vts.com.
+6             PTR     ebassvip.vts.com.
+9             PTR     peer1svip.vts.com.
+10      PTR     sfs-phy1.vts.com.
+11      PTR     sfs-phy2.vts.com.
+12      PTR     sfs-phy3.vts.com.
+13      PTR     sfs-phy4.vts.com.
+14      PTR     nas1.vts.com.
+15      PTR     nas2.vts.com.
+16      PTR     nas3.vts.com.
+17      PTR     nas4.vts.com.
+18      PTR     nasconsole.vts.com.
+19              PTR             cloud-ms-1svip.vts.com.
+20      PTR     sc-1svip.vts.com.
+21      PTR     sc-2svip.vts.com.
+22      PTR     pl-3svip.vts.com.
+23      PTR     pl-4svip.vts.com.
+24      PTR     omservmsvip.vts.com.
+25      PTR     omservssvip.vts.com.
+26      PTR     nedsssvip.vts.com.
+29      PTR     oss2mastersvip.vts.com.
+31      PTR     cloud-svc-1svip.vts.com.
+32      PTR     cloud-svc-2svip.vts.com.
+42      PTR     cloud-svc-3svip.vts.com.
+43      PTR     cloud-svc-4svip.vts.com.
+48      PTR     cloud-svc-5svip.vts.com.
+49      PTR     cloud-svc-6svip.vts.com.
+50      PTR     cloud-svc-7svip.vts.com.
+51      PTR     cloud-svc-8svip.vts.com.
+33      PTR     cloud-db-1svip.vts.com.
+34      PTR     cloud-db-2svip.vts.com.

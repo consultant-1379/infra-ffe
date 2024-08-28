@@ -1,0 +1,4 @@
+flask
+openstacksdk==0.103.0
+setuptools-rust
+paramiko

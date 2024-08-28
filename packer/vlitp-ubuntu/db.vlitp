@@ -1,0 +1,16 @@
+$ORIGIN vlitp.athtem.eei.ericsson.se.
+$TTL 1D
+@     IN SOA   root gateway (
+                        200405191 ; serial
+                        8H        ; refresh
+                        4H        ; retry
+                        4W        ; expire
+                        1D )      ; minimum
+                NS      gateway
+                MX      10 gateway
+localhost       A       127.0.0.1
+gateway         A       192.168.0.1
+netsim          A       192.168.0.2
+lms             A       192.168.0.3
+tafexem1        A       192.168.0.197
+selenium-hub    A       192.168.0.231

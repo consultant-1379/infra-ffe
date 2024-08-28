@@ -1,0 +1,56 @@
+---
+- name: Set project directory and git directory variables
+  set_fact:
+    project_dir: '{{ playbook_dir | replace("/ansible","")}}/deployments/{{ deployment_id }}/'
+    git_dir: '{{ playbook_dir | replace("/ansible","")}}/deployments/'
+
+- name: Print project and git directory values
+  debug:
+    var: "{{ directory }}"
+  loop:
+    - project_dir
+    - git_dir
+  loop_control:
+    loop_var: directory
+    label: "{{ directory }}"
+
+- name: Check if project directory exists
+  stat:
+    path: "{{ project_dir }}"
+  register: stat_project_dir
+
+- name: Delete Terraform configuration
+  community.general.terraform:
+    project_path: "{{ project_dir }}"
+    state: absent
+    force_init: true
+    provider_upgrade: true
+  register: terraform_delete
+  no_log: false
+  environment:
+    PGPASSWORD: "{{ terraform_postgres_password }}"
+
+- name: Output from applying Terraform configuration
+  debug:
+    msg: "{{ terraform_delete.stdout_lines  }}"
+
+- name: Delete project directory from git
+  shell: "git rm -rf {{ project_dir }}"
+  when: stat_project_dir.stat.exists
+
+# git diff returns 1 if there are changes, 0 if there are none.
+- name: Run git diff to check for changes
+  shell: git diff --quiet HEAD
+  args:
+    chdir: "{{ git_dir }}"
+  register: git_diff
+  ignore_errors: true
+- name: Print git diff
+  debug:
+    msg: "{{ git_diff.stdout_lines }}"
+- name: Commit changes to Git repo
+  shell: "git commit -m 'delete {{ deployment_id }}'"
+  args:
+    chdir: "{{ git_dir }}"
+  register: git_commit
+  when: git_diff.rc|int == 1

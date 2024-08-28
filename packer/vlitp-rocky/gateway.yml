@@ -1,0 +1,95 @@
+- name: Configure Gateway VM
+  hosts: default
+  gather_facts: true
+  gather_subset: min
+  become: yes
+  tasks:
+    - name: Update list of available packages and their versions
+      ansible.builtin.yum:
+        update_cache: yes
+
+    - name: Add docker repo
+      command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+    - name: Install required packages
+      ansible.builtin.yum:
+        name:
+          - wget
+          - python2
+          - python3
+          - tmux
+          - dnsmasq
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+          - squid
+          - libffi-devel
+          - python36-devel
+          - make
+          - rust
+          - gcc
+          - cargo
+          - openssl-devel
+          - nginx
+          - bind
+          - bind-utils
+          - net-tools
+          - nfs-utils
+        state: present
+
+    - name: Install setuptools-rust & paramiko
+      shell: "python3 -m pip install {{ pkgs }}"
+      loop:
+        - setuptools-rust
+        - paramiko
+      loop_control:
+        loop_var: pkgs
+        label: "{{ pkgs }}"
+
+    - name: Copy chrony.conf
+      copy:
+        src: chrony.conf
+        dest: /etc/chrony.conf
+
+    - name: Enable nginx & docker to start on boot
+      ansible.builtin.systemd:
+        name: "{{ services }}"
+        enabled: true
+      loop:
+        - nginx # Creates symlink /etc/systemd/system/multi-user.target.wants/nginx.service → /lib/systemd/system/nginx.service
+        - docker # Creates symlink /etc/systemd/system/multi-user.target.wants/docker.service → /usr/lib/systemd/system/docker.service
+      loop_control:
+        loop_var: services
+        label: "{{ services }}"
+
+    - name: Update nginx systemd file to start service when network is online
+      ini_file:
+        dest: /lib/systemd/system/nginx.service
+        section: Unit
+        option: After
+        value: "network-online.target nss-lookup.target"
+
+    - name: Enable PasswordAuthentication and Listen Address for for SSHD
+      replace:
+        path: /etc/ssh/sshd_config
+        regexp: '^[#]?#ListenAddress 0.0.0.0.*'
+        replace: 'ListenAddress 0.0.0.0'
+
+    - name: Create lciadm100 user
+      ansible.builtin.user:
+        name: lciadm100
+        shell: /bin/bash
+        expires: -1
+        password: "$6$rounds=250000$AHXpJsOsdeMwnFtV$6usIVML/FlSv/0QiJ1ZZAdQvoSj.v0WhSgJmiHB1l8tff9E5pY.YHR6.9Q8haeHQ8TXw/cureSIMOlaL95ncR/"
+        groups: docker
+
+    - name: Add lciadm100 user to sudoers config
+      copy:
+        content: "lciadm100 ALL=(ALL) NOPASSWD: ALL"
+        dest: /etc/sudoers.d/lciadm100
+
+    - name: Run cloud-init clean
+      command:
+        cmd: cloud-init clean --logs --machine-id --seed

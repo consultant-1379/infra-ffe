@@ -1,0 +1,80 @@
+- name: Check if base images are overridden
+  set_fact:
+    images: '{{ images|default([]) + [ { "image_var":item, "id": lookup("ansible.builtin.vars",item,default="")}] }}'
+  loop: "{{ image_vars }}"
+
+- name: "Get list of OpenStack volumes in the {{ base_project }} project"
+  openstack.cloud.volume_info:
+    details: true
+  environment:
+    OS_PROJECT: "{{ base_project }}"
+  register: openstack_volumes
+
+- name: Find images without a corresponding volume.
+  set_fact:
+    images_without_volumes: "{{ images_without_volumes| default([]) + [ item]  if item.id not in image_id_list else [] }}"
+  loop: "{{  images | rejectattr('id','eq','') |list}}"
+  vars:
+    image_id_list: '{{ openstack_volumes.volumes| map(attribute="volume_image_metadata.image_id")|list }}'
+
+- name: List all images
+  openstack.cloud.image_info:
+  register: images_in_glance
+
+- name: Create volumes based on images
+  openstack.cloud.volume:
+    state: present
+    name: '{{ (images_in_glance.images | selectattr("id","eq",image.id) | first).name + "_test_root_volume" }}'
+    image: "{{ image.id }}"
+    size: '{{ (((images_in_glance.images | selectattr("id","eq",image.id) | first).min_disk|int/8) | round(0,"ceil") |int )*8 }}'
+    sdk_log_level: DEBUG
+    timeout: 900
+  environment:
+    OS_PROJECT: "{{ base_project }}"
+  loop: "{{ images_without_volumes | default([]) }}"
+  loop_control:
+    loop_var: image
+    label: "{{ image.image_var }}"
+  register: new_volumes
+
+- name: "Get list of OpenStack volumes in the {{ base_project }} project"
+  openstack.cloud.volume_info:
+    details: true
+  environment:
+    OS_PROJECT: "{{ base_project }}"
+  register: openstack_volumes
+
+- name: Set base volume names
+  set_fact:
+    gateway_base_volume:
+      '{{ openstack_volumes.volumes | selectattr("name","match",".*root_vol.*")
+      | selectattr("volume_image_metadata.image_id","eq",lookup("ansible.builtin.vars","gateway_base_image",default=""))
+      | default([{"name":"gateway_base_root_volume"}],true)
+      |  map(attribute="name")|first }}'
+
+    netsim_base_volume:
+      '{{ openstack_volumes.volumes | selectattr("name","match",".*root_vol.*")
+      | selectattr("volume_image_metadata.image_id","eq",lookup("ansible.builtin.vars","netsim_base_image",default=""))
+      | default([{"name":"netsim_base_root_volume"}],true)
+      | map(attribute="name")
+      |first  }}'
+    tafex_base_volume:
+      '{{ openstack_volumes.volumes | selectattr("name","match",".*root_vol.*")
+      | selectattr("volume_image_metadata.image_id","eq",lookup("ansible.builtin.vars","tafex_base_image",default=""))
+      | default([{"name":"tafex_base_root_volume"}],true)
+      | map(attribute="name")
+      |first  }}'
+    seleniumhub_base_volume:
+      '{{ openstack_volumes.volumes | selectattr("name","match",".*root_vol.*")
+      | selectattr("volume_image_metadata.image_id","eq",lookup("ansible.builtin.vars","seleniumhub_base_image",default=""))
+      | default([{"name":"seleniumhub_base_root_volume"}],true)
+      | map(attribute="name")
+      |first  }}'
+- name: Print base volumes
+  debug:
+    msg:
+      - "Base Volumes set:"
+      - "gateway_base_volume: {{ gateway_base_volume }}"
+      - "netsim_base_volume: {{ netsim_base_volume }}"
+      - "tafex_base_volume: {{ tafex_base_volume }}"
+      - "seleniumhub_base_volume: {{ seleniumhub_base_volume }}"

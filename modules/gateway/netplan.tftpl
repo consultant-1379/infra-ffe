@@ -1,0 +1,16 @@
+network:
+  version: 2
+  ethernets:
+    ens3:
+      addresses:
+        - ${external_ipv4_address}
+        - ${external_ipv6_address}
+      routes:
+        - to: default
+          via: ${external_ipv4_gateway}
+        - to: default
+          via: ${external_ipv6_gateway}
+    ens4:
+      addresses:
+        - 192.168.0.1/24
+        - 2001:1b70:82a1:103::1/64

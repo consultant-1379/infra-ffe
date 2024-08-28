@@ -1,0 +1,6 @@
+tf_backend_host: infra-awx-backup.athtem.eei.ericsson.se
+dns_servers:
+  - 159.107.173.3
+  - 159.107.173.12
+base_project: FFE_infra_admin
+base_project_user: FFE_infra_admin
